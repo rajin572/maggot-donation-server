@@ -8,9 +8,20 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: { filename: string; content: Buffer; contentType: string }[]
+) {
   try {
-    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, html });
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      html,
+      attachments,
+    });
     return { success: true };
   } catch (error: any) {
     console.error("Email send error:", error);

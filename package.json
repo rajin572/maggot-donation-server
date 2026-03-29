@@ -4,13 +4,15 @@
   "description": "",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "cross-env NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
   "author": "Programming Hero",
   "license": "ISC",
   "dependencies": {
+    "@fontsource/noto-sans-bengali": "^5.2.11",
+    "@types/pdfkit": "^0.17.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.4",
@@ -19,7 +21,9 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.3.0",
-    "nodemailer": "^7.0.12"
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^7.0.12",
+    "pdfkit": "^0.18.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -29,6 +33,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.37",
     "@types/nodemailer": "^6.4.23",
+    "cross-env": "^10.1.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   }

@@ -6,6 +6,7 @@ import { sendEmail } from "../../utils/mailer";
 import { getDB } from "../../config/db";
 import { getProductCollection } from "../product/product.model";
 import { validateCoupon, applyCouponUsage } from "../coupons/coupons.service";
+import { generateInvoicePdf } from "../../utils/generateInvoicePdf";
 
 const VALID_STATUSES = ["pending", "approved", "declined", "cancelled", "completed"];
 
@@ -114,7 +115,7 @@ export async function createOrder(payload: ICreateOrderPayload) {
   );
 
   if (email) {
-    sendOrderTrackingEmail(email, name, orderId).catch(console.error);
+    sendOrderTrackingEmail(email, name, orderId, newOrder).catch(console.error);
   }
 
   // Notify admin about new order
@@ -162,7 +163,7 @@ async function sendAdminNewOrderEmail(adminEmail: string, order: any) {
   await sendEmail(adminEmail, `নতুন অর্ডার: ${order.orderId} — ম্যাগট-ফ্রি রেসকিউ কিট`, html);
 }
 
-async function sendOrderTrackingEmail(email: string, name: string, orderId: string) {
+async function sendOrderTrackingEmail(email: string, name: string, orderId: string, order: any) {
   const token = jwt.sign(
     { orderId, purpose: "order_tracking" },
     process.env.JWT_SECRET as string,
@@ -173,27 +174,39 @@ async function sendOrderTrackingEmail(email: string, name: string, orderId: stri
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #1a1a2e;">Order Confirmed!</h2>
-      <p>Hi ${escapeHtml(name)},</p>
-      <p>Thank you for your order. We have received it and it is currently being processed.</p>
-      <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <p style="margin: 0; font-size: 14px; color: #666;">Order ID</p>
-        <p style="margin: 5px 0 0; font-weight: bold; font-size: 16px;">${orderId}</p>
+      <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px 24px; border-radius: 10px 10px 0 0;">
+        <h2 style="color: #fbbf24; margin: 0; font-size: 18px;">✅ অর্ডার নিশ্চিত হয়েছে!</h2>
       </div>
-      <p>You can track your order status anytime using the link below:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${trackingUrl}"
-           style="background-color: #1a1a2e; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
-          Track My Order
-        </a>
+      <div style="background: #f9fafb; padding: 24px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb;">
+        <p style="color: #374151; margin-bottom: 12px;">প্রিয় ${escapeHtml(name)},</p>
+        <p style="color: #374151; margin-bottom: 16px;">আপনার অর্ডার সফলভাবে গৃহীত হয়েছে। Invoice এই ইমেইলের সাথে সংযুক্ত রয়েছে।</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 16px;">
+          <tr><td style="padding: 6px 0; color: #6b7280;">অর্ডার আইডি</td><td style="padding: 6px 0; font-weight: bold; color: #111827;">${orderId}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">পরিমাণ</td><td style="padding: 6px 0; color: #111827;">${order.quantity} কিট</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">ডেলিভারি চার্জ</td><td style="padding: 6px 0; color: #111827;">৳${order.deliveryFee?.toLocaleString()}</td></tr>
+          ${order.couponCode ? `<tr><td style="padding: 6px 0; color: #6b7280;">কুপন (${escapeHtml(order.couponCode)})</td><td style="padding: 6px 0; color: #16a34a;">-৳${order.discountAmount?.toLocaleString()}</td></tr>` : ""}
+          <tr style="border-top: 2px solid #1a1a2e;"><td style="padding: 10px 0 4px; font-weight: bold; color: #1a1a2e;">মোট পরিশোধযোগ্য</td><td style="padding: 10px 0 4px; font-weight: bold; font-size: 16px; color: #1a1a2e;">৳${order.totalPrice?.toLocaleString()}</td></tr>
+        </table>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${trackingUrl}" style="background-color: #1a1a2e; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; display: inline-block;">
+            অর্ডার ট্র্যাক করুন
+          </a>
+        </div>
+        <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center;">ট্র্যাকিং লিংক ৩০ দিনের জন্য বৈধ।</p>
       </div>
-      <p style="color: #666; font-size: 13px;">This tracking link is valid for 30 days.</p>
-      <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-      <p style="color: #999; font-size: 12px;">Maggot Donation Platform</p>
     </div>
   `;
 
-  await sendEmail(email, "Order Confirmation - Maggot Donation", html);
+  // Generate and attach user invoice PDF
+  let attachments;
+  try {
+    const pdfBuffer = await generateInvoicePdf(order, "user");
+    attachments = [{ filename: `invoice-${orderId}.pdf`, content: pdfBuffer, contentType: "application/pdf" }];
+  } catch (err) {
+    console.error("[Invoice PDF generation failed]", err);
+  }
+
+  await sendEmail(email, `অর্ডার নিশ্চিত: ${orderId} — ম্যাগট-ফ্রি রেসকিউ কিট`, html, attachments);
 }
 
 export async function updateOrderStatus(id: string, status: string, reason?: string) {
